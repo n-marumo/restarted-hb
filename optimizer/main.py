@@ -1,11 +1,13 @@
 import pandas as pd
 from . import method, internal
 import numpy as np
+from scipy import optimize as spopt
 import pprint
 import time
 import os
 
 DIVERGENCE_RATIO = 1e5  # used for checking divergence
+SCIPY_TOL = 1e-15
 
 
 class SmoothNonconvexMin:
@@ -93,3 +95,66 @@ class SmoothNonconvexMin:
         df.to_csv(f"{folder}/{filename}.csv", index=False)
         if self.sols:
             np.savetxt(f"{folder}/sols_{filename}.txt", self.sols)
+
+
+class SmoothNonconvexMinScipy:
+    def __init__(self, instance):
+        self.instance = instance
+        self.oracle = internal.Oracle(instance)
+        self.results = None
+
+    def solve(
+        self,
+        alg_id,
+        iter_start=100,
+        timeout=20,
+        tol_obj=0,
+        tol_grad=0,
+    ):
+        self.results = pd.DataFrame()
+        iter = iter_start
+        nit = -1
+
+        while True:
+            self.oracle.reset_count()
+            start_time = time.perf_counter()
+            res = spopt.minimize(
+                self.oracle.func_grad,
+                # self.oracle.func,
+                self.instance.x0,
+                jac=True,
+                method=alg_id,
+                tol=SCIPY_TOL,
+                options={"maxiter": iter},
+                # options={"maxiter": iter, "disp": True},
+            )
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
+
+            print(res.success)
+            print(res.message)
+            if res.nit == nit:
+                break
+            nit = res.nit
+
+            obj, grad = self.oracle.func_grad(res.x, False)
+            gradnorm = np.linalg.norm(grad)
+            df = pd.DataFrame(
+                {
+                    "iter": [res.nit],
+                    "elapsed_time": [elapsed_time],
+                    "obj": obj,
+                    "gradnorm": gradnorm,
+                    "eval": self.oracle.count["eval"],
+                    "grad": self.oracle.count["grad"],
+                }
+            )
+            self.results = pd.concat([self.results, df])
+            pprint.pprint(self.results)
+            if obj <= tol_obj or gradnorm <= tol_grad or elapsed_time > timeout / 2:
+                break
+            iter *= 2
+
+    def save_result(self, folder, filename):
+        os.makedirs(folder, exist_ok=True)
+        self.results.to_csv(f"{folder}/{filename}.csv", index=False)

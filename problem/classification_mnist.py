@@ -50,17 +50,6 @@ class MultiLayerPerceptron_sigmoid(nn.Module):
         return x
 
 
-class MultiLayerPerceptron_relu(nn.Module):
-    features: Sequence[int]
-
-    @nn.compact
-    def __call__(self, x):
-        for feat in self.features[:-1]:
-            x = nn.relu(nn.Dense(feat, dtype=jnp.float64)(x))
-        x = nn.Dense(self.features[-1], dtype=jnp.float64)(x)
-        return x
-
-
 def get_data(train=True, train_size=0, random_state=0):
     data = MNIST("/tmp/mnist/", train=train, download=True, transform=FlattenAndCast())
     images = jnp.array(data.train_data).reshape(len(data.train_data), -1) / SCALE_IMAGE
@@ -87,8 +76,6 @@ class Problem:
         # build model
         if activation == "sigmoid":
             self.model = MultiLayerPerceptron_sigmoid(layer_size + [N_TARGETS])
-        elif activation == "relu":
-            self.model = MultiLayerPerceptron_relu(layer_size + [N_TARGETS])
         key, subkey = jax.random.split(key)
         tree = self.model.init(key, self.images_train)
 
