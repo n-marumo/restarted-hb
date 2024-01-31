@@ -1,0 +1,15 @@
+import jax
+import jax.numpy as jnp
+import functools
+
+
+class Problem:
+    def __init__(self, d, sigma_x0, seed=0):
+        key = jax.random.PRNGKey(seed)
+        self.d = d
+        self.x_opt = jnp.sqrt(jnp.arange(1, self.d + 1))
+        self.x0 = self.x_opt + jax.random.normal(key, (d,)) * sigma_x0
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def func(self, x):
+        return jnp.sum((x**2 - jnp.arange(1, self.d + 1)) ** 2)

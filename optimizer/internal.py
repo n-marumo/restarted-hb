@@ -6,6 +6,10 @@ class Oracle:
         self.__func = instance.func
         self.count = dict.fromkeys(["eval", "grad"], 0)
 
+    @property
+    def total_count(self):
+        return self.count["eval"] + self.count["grad"]
+
     def reset_count(self):
         self.count = dict.fromkeys(self.count.keys(), 0)
 

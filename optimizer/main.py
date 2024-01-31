@@ -56,8 +56,9 @@ class SmoothNonconvexMin:
         self,
         alg_id,
         alg_param={},
-        max_iter=100,
-        timeout=20,
+        max_iter=1000000,
+        max_oracle=1000000,
+        timeout=100,
         tol_obj=0,
         tol_grad=0,
         print_interval=1,
@@ -86,6 +87,7 @@ class SmoothNonconvexMin:
                 or self.elapsed_time >= timeout
                 or gradnorm <= tol_grad
                 or obj <= tol_obj
+                or self.oracle.total_count >= max_oracle
             ):
                 break
 
@@ -106,6 +108,7 @@ class SmoothNonconvexMinScipy:
     def solve(
         self,
         alg_id,
+        max_oracle=1000000,
         iter_start=100,
         timeout=20,
         tol_obj=0,
@@ -151,7 +154,12 @@ class SmoothNonconvexMinScipy:
             )
             self.results = pd.concat([self.results, df])
             pprint.pprint(self.results)
-            if obj <= tol_obj or gradnorm <= tol_grad or elapsed_time > timeout / 2:
+            if (
+                obj <= tol_obj
+                or gradnorm <= tol_grad
+                or elapsed_time > timeout / 2
+                or self.oracle.total_count >= max_oracle
+            ):
                 break
             iter *= 2
 

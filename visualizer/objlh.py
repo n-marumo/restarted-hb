@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
 import pathlib
 
 
@@ -16,7 +17,7 @@ plt.rcParams["text.usetex"] = True
 
 problem_names = [
     "classification_mnist",
-    # "ae_mnist",
+    "ae_mnist",
     "mf_movielens100k",
 ]
 ylabels = {
@@ -28,10 +29,10 @@ marker_labels = ["Restart (successful)", "Restart (unsuccessful)"]
 M = len(ylabels)
 colors = ["black", cmap(0), cmap(1), cmap(2), cmap(3)]
 markers = ["o", "x"]
-markerwidth = [1, 2]
+markerwidth = [1, 1]
+linewidth = [3, 2, 2]
 common_line_option = {
     "alpha": ALPHA,
-    "linewidth": 2,
 }
 common_marker_option = {
     "linewidth": 0,
@@ -50,7 +51,21 @@ def get_instance_paths(problem_name):
     return [p for p in path.iterdir() if p.is_dir()]
 
 
-def trim_data(df: pd.DataFrame, maxiter, last):
+def trim_data(df: pd.DataFrame, timeout, max_oracle, tol_obj):
+    df = df.assign(oracle=df["eval"] + df["grad"])
+    idxs = np.where(df["elapsed_time"] > timeout)[0]
+    if len(idxs):
+        df = df[: idxs[0]]
+    idxs = np.where(df["oracle"] > max_oracle)[0]
+    if len(idxs):
+        df = df[: idxs[0]]
+    idxs = np.where(df["obj"] <= tol_obj)[0]
+    if len(idxs):
+        df = df[: idxs[0] + 1]
+    return df
+
+
+def trim_data2(df: pd.DataFrame, maxiter, last):
     if len(df) > maxiter:
         if last:
             df = df[-maxiter:]
@@ -59,7 +74,7 @@ def trim_data(df: pd.DataFrame, maxiter, last):
     return df
 
 
-def make_figure(problem_name, maxiter=1000000, last=False, legend=False):
+def make_figure(problem_name, timeout=10000, max_oracle=10000, tol_obj=0, maxiter=1000000, last=False, legend=False):
     for instance_path in get_instance_paths(problem_name):
         if instance_path.name.startswith("_"):
             continue
@@ -68,7 +83,8 @@ def make_figure(problem_name, maxiter=1000000, last=False, legend=False):
         for alg_path in instance_path.glob("ourrhb_*.csv"):
             print(alg_path)
             df = pd.read_csv(str(alg_path))
-            df = trim_data(df, maxiter, last)
+            df = trim_data(df, timeout, max_oracle, tol_obj)
+            df = trim_data2(df, maxiter, last)
             fig, ax = plt.subplots(figsize=(7, 4))
 
             # plot lines
@@ -79,6 +95,7 @@ def make_figure(problem_name, maxiter=1000000, last=False, legend=False):
                     label=ylabel,
                     color=colors[i],
                     linestyle=linestyles[i],
+                    linewidth=linewidth[i],
                     **common_line_option,
                 )
 
@@ -104,14 +121,6 @@ def make_figure(problem_name, maxiter=1000000, last=False, legend=False):
             ax.set_yscale("log")
             if legend:
                 ax.legend(loc="lower right")
-            # if (problem_name, last) == ("classification_mnist", True):
-            #     ax.set_ylim(bottom=1e-12)
-            # elif (problem_name, last) == (
-            #     "mf_movielens100k",
-            #     True,
-            # ) and instance_path.name.endswith("200"):
-            #     ax.set_ylim(bottom=1e-11)
-            # else:
             ax.set_ylim(bottom=1e-11)
             fig.tight_layout(pad=0.1)
             fig.savefig(f"{str(instance_path)}_objlh_maxiter{maxiter}_last{last}.pdf")
@@ -129,7 +138,17 @@ def make_legend():
     legend_fig = plt.figure("Legend plot", figsize=figsize)
     ax = fig.add_subplot(111)
 
-    lines = [ax.plot(dd, dd, color=colors[i], linestyle=linestyles[i], **common_line_option)[0] for i in range(M)]
+    lines = [
+        ax.plot(
+            dd,
+            dd,
+            color=colors[i],
+            linestyle=linestyles[i],
+            linewidth=linewidth[i],
+            **common_line_option,
+        )[0]
+        for i in range(M)
+    ]
     lines += [
         ax.plot(
             dd,
@@ -155,7 +174,10 @@ def make_legend():
     legend_fig.savefig("legend_objlh.pdf")
 
 
-for problem_name in problem_names:
-    make_figure(problem_name, maxiter=500, last=False)
-    make_figure(problem_name, maxiter=500, last=True)
+make_figure("classification_mnist", max_oracle=5000, maxiter=500, last=False)
+make_figure("classification_mnist", max_oracle=5000, maxiter=500, last=True)
+make_figure("ae_mnist", max_oracle=15000, maxiter=500, last=False)
+make_figure("ae_mnist", max_oracle=15000, maxiter=500, last=True)
+make_figure("mf_movielens100k", max_oracle=3000, maxiter=500, last=False)
+make_figure("mf_movielens100k", max_oracle=3000, maxiter=500, last=True)
 make_legend()

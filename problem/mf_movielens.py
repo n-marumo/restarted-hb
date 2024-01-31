@@ -8,7 +8,7 @@ import pandas as pd
 
 jax.config.update("jax_enable_x64", True)
 
-DATASET_FOLDER = "../../dataset/ml-100k"
+DATASET_FOLDER = "../dataset/ml-100k"
 
 
 def df_to_sparse_matrix(df: pd.DataFrame):

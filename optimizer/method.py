@@ -49,21 +49,16 @@ class GradientDescent(Base):
     def update(self, oracle: internal.Oracle):
         while True:
             y = self.x - self.grad_x / self.L
-            func_y = oracle.func(y)
+            func_y, grad_y = oracle.func_grad(y)
             u = y - self.x
-            if (
-                func_y
-                <= self.func_x
-                + jnp.vdot(self.grad_x, u)
-                + self.L / 2 * jnp.linalg.norm(u) ** 2
-            ):
+            if func_y <= self.func_x + jnp.vdot(self.grad_x, u) + self.L / 2 * jnp.linalg.norm(u) ** 2:
                 break
             else:
                 self.L *= self.params["L_inc"]
         self.x = y
         self.func_x = func_y
+        self.grad_x = grad_y
         self.L *= self.params["L_dec"]
-        self.grad_x = oracle.grad(self.x)
         self.iter += 1
 
 
@@ -118,7 +113,7 @@ class OurRestartedHB(Base):
         self.v = self.v - grad_old / self.L
         self.x = self.x + self.v
         norm_v = jnp.linalg.norm(self.v)
-        self.S += norm_v ** 2
+        self.S += norm_v**2
 
         # evaluate func and grad at x
         self.func_x, self.grad_x = oracle.func_grad(self.x)
@@ -128,10 +123,7 @@ class OurRestartedHB(Base):
             self.grad_best = self.grad_x
 
         # check if L is large enough
-        if (
-            self.func_x - func_old
-            > jnp.vdot(grad_old, self.v) + self.L / 2 * norm_v ** 2
-        ):
+        if self.func_x - func_old > jnp.vdot(grad_old, self.v) + self.L / 2 * norm_v**2:
             self.init_epoch(self.x_best, self.func_best, self.grad_best)
             self.L *= self.params["L_inc"]
             return
@@ -140,9 +132,7 @@ class OurRestartedHB(Base):
         norm_grad_bar = jnp.linalg.norm(self.grad_bar)
         self.H = max(
             self.H,
-            3
-            / norm_v ** 2
-            * (self.func_x - func_old - jnp.vdot(grad_old + self.grad_x, self.v) / 2),
+            3 / norm_v**2 * (self.func_x - func_old - jnp.vdot(grad_old + self.grad_x, self.v) / 2),
             (8 / (k * self.S)) ** 0.5 * (norm_grad_bar - self.L / k * norm_v),
         )
 
@@ -243,19 +233,12 @@ class OurRestartedAGD(Base):
         self.M = max(
             self.M,
             self.safe_div(
-                12
-                * (
-                    func_y
-                    - self.func_x
-                    - (jnp.vdot((self.grad_y + self.grad_x) / 2, u))
-                ),
+                12 * (func_y - self.func_x - (jnp.vdot((self.grad_y + self.grad_x) / 2, u))),
                 jnp.linalg.norm(u) ** 3,
             ),
             self.safe_div(
-                jnp.linalg.norm(
-                    self.grad_y + theta_k * grad_old - (1 + theta_k) * self.grad_x
-                ),
-                theta_k * norm_v ** 2,
+                jnp.linalg.norm(self.grad_y + theta_k * grad_old - (1 + theta_k) * self.grad_x),
+                theta_k * norm_v**2,
             ),
         )
 
@@ -289,9 +272,7 @@ class LL2022(Base):
         # parameters in Theorem 2.2
         self.eta = 1 / (4 * self.params["L"])
         self.B = (self.params["eps"] / self.params["rho"]) ** 0.5
-        self.theta = min(
-            4 * (self.params["eps"] * self.params["rho"] * self.eta ** 2) ** 0.25, 1
-        )
+        self.theta = min(4 * (self.params["eps"] * self.params["rho"] * self.eta**2) ** 0.25, 1)
         self.K = round(1 / self.theta)
 
         self.B0 = self.params["B0"]
@@ -329,7 +310,7 @@ class LL2022(Base):
         self.x_pre = self.x
         self.x = y - self.eta * oracle.grad(y)
         norm_diff_x = jnp.linalg.norm(self.x - self.x_pre)
-        self.sqsum_diff += norm_diff_x ** 2
+        self.sqsum_diff += norm_diff_x**2
 
         # compute y_hat
         if self.k <= self.K / 2:
@@ -381,16 +362,11 @@ class JNJ2018(Base):
         # parameters in Equation (3)
         self.eta = 1 / (4 * self.params["L"])
         self.kappa = self.params["L"] / (self.params["rho"] * self.params["eps"]) ** 0.5
-        self.theta = min(1 / (4 * self.kappa ** 0.5), 1)
-        self.gamma = self.theta ** 2 / self.eta
+        self.theta = min(1 / (4 * self.kappa**0.5), 1)
+        self.gamma = self.theta**2 / self.eta
         self.s = self.gamma / (4 * self.params["rho"])
-        self.J = self.kappa ** 0.5 * self.params["chi"] * self.params["c"]
-        self.r = (
-            self.eta
-            * self.params["eps"]
-            * self.params["chi"] ** -5
-            * self.params["c"] ** -8
-        )
+        self.J = self.kappa**0.5 * self.params["chi"] * self.params["c"]
+        self.r = self.eta * self.params["eps"] * self.params["chi"] ** -5 * self.params["c"] ** -8
 
         self.x = x0
         self.v = jnp.zeros_like(x0)
@@ -436,21 +412,14 @@ class JNJ2018(Base):
 
     def update(self, oracle: internal.Oracle):
         self.no_perturb_count += 1
-        if (
-            self.no_perturb_count >= self.J
-            and jnp.linalg.norm(oracle.grad(self.x)) <= self.params["eps"]
-        ):
+        if self.no_perturb_count >= self.J and jnp.linalg.norm(oracle.grad(self.x)) <= self.params["eps"]:
             self.x = self.perturb(self.x, self.r)
 
         # update y
         y = self.x + (1 - self.theta) * self.v
         func_y, grad_y = oracle.func_grad(y)
 
-        rhs = (
-            func_y
-            + jnp.vdot(grad_y, self.x - y)
-            - self.gamma / 2 * jnp.linalg.norm(self.x - y) ** 2
-        )
+        rhs = func_y + jnp.vdot(grad_y, self.x - y) - self.gamma / 2 * jnp.linalg.norm(self.x - y) ** 2
         if oracle.func(self.x) >= rhs:
             # AGD
             x_old = self.x
@@ -458,9 +427,7 @@ class JNJ2018(Base):
             self.v = self.x - x_old
         else:
             # negative curvature exploitation
-            self.x = self.negative_curvature_exploitation(
-                self.x, self.v, self.s, oracle
-            )
+            self.x = self.negative_curvature_exploitation(self.x, self.v, self.s, oracle)
             self.v = jnp.zeros_like(self.v)
 
         self.iter += 1
